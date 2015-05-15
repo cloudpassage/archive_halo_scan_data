@@ -50,8 +50,8 @@ class CmdArgs
 
   def initialize()
     @base_url = "https://portal.cloudpassage.com/"
-    @key_id = "keyID"
-    @key_secret = "keySecret"
+    @key_id = "05266dad"
+    @key_secret = "03f7ce883627f654cc877f67c9d61393"
     @url = nil
     @group_name = nil
     @verbose = false
@@ -190,7 +190,7 @@ def filterScanResults(status_list, serverList, scan_type, statisticsMap, cmd_lin
   status_list.each do |ss|
     if (serverList == nil) || serverIdInList(serverList,ss.server_id.downcase)
       if (scan_type == nil) || (scan_type.downcase == ss.module.downcase)
-        puts "Processing scan results #{ss.id}" if cmd_line.debug
+        puts "Processing scan results #{ss.id}, type=#{ss.module.downcase}" if cmd_line.debug
         if (cmd_line.details != :Files)
           statBucketName = ss.module.downcase
           statBucket = statisticsMap[statBucketName]
@@ -213,18 +213,21 @@ def filterScanResults(status_list, serverList, scan_type, statisticsMap, cmd_lin
   end
 end
 
-def displayScanResults(scanList,verbose,details)
+def displayScanResults(scanList,verbose,details,debug)
   scanList.each do |ss|
     puts ss.to_s if verbose
     if (ss.details != nil)
       if (details == :Console)
         puts JSON.pretty_generate ss.details
       elsif (details == :Files)
-        filename = "details/#{ss.server_id.downcase}/#{ss.module.downcase}_#{ss.id}_details.txt"
+        prefix = "details/#{ss.server_hostname}_#{ss.server_id.downcase}"
+        filename = prefix + "/#{ss.module.downcase}_#{ss.id}_details.txt"
         f = openFileInDir(filename)
         f.write(JSON.pretty_generate ss.details)
         f.close()
       end
+    else
+      puts "No details for scan #{ss.id}, type=#{ss.module.downcase}" if debug
     end
   end
 end
@@ -233,7 +236,7 @@ def singleThreadStats(client,cmd_line,serverList)
   statisticsMap = {}
   status_list, next_link, count = Halo::ScanStatus.all(client,cmd_line.page_size,nil,cmd_line.starting,cmd_line.ending,nil)
   resultsList = filterScanResults(status_list,serverList,nil,statisticsMap,cmd_line,client)
-  displayScanResults(resultsList,cmd_line.verbose,cmd_line.details)
+  displayScanResults(resultsList,cmd_line.verbose,cmd_line.details,cmd_line.debug)
   while (next_link != nil)
     begin
       status_list, next_link, count = Halo::ScanStatus.all(client,nil,nil,nil,nil,next_link)
@@ -244,7 +247,7 @@ def singleThreadStats(client,cmd_line,serverList)
       redo
     end
     resultsList = filterScanResults(status_list,serverList,nil,statisticsMap,cmd_line,client)
-    displayScanResults(resultsList,cmd_line.verbose,cmd_line.details)
+    displayScanResults(resultsList,cmd_line.verbose,cmd_line.details,cmd_line.debug)
   end
   statisticsMap.each do |stype,bucket|
     puts "Scan: type=#{bucket.type_name} passed=#{bucket.pass_count} failed=#{bucket.fail_count}"
@@ -345,7 +348,7 @@ cmd_line.key_list.each do |key|
       while (threadMap.size > 0) || (outputMap.size > 0)
         rez = outputMap[key]
         if (rez != nil)
-          displayScanResults(rez,cmd_line.verbose,cmd_line.details)
+          displayScanResults(rez,cmd_line.verbose,cmd_line.details,cmd_line.debug)
           outputMap.delete(key)
           pageNum += 1
           key = "#{pageNum}"
