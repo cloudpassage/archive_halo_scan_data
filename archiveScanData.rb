@@ -46,7 +46,7 @@ end
 
 class CmdArgs
   attr_accessor :base_url, :key_id, :key_secret, :verbose, :page_size, :details, :percentiles, :key_list
-  attr_accessor :group_name, :display_issues, :get_status, :starting, :ending, :threads, :debug
+  attr_accessor :group_name, :display_issues, :get_status, :starting, :ending, :threads, :debug, :api_stats
 
   def initialize()
     @base_url = "https://portal.cloudpassage.com/"
@@ -65,6 +65,7 @@ class CmdArgs
     @threads = 1
     @debug = false
     @key_list = []
+    @api_stats = false
   end
 
   def parse(args)
@@ -75,7 +76,7 @@ class CmdArgs
         readAuthFile(filename)
       elsif (arg == "-v")
         @verbose = true
-      elsif (arg == "-?") || (arg == "-h")
+      elsif (arg == "-?") || (arg == "-h") || (arg == "--help")
         usage
         exit
       elsif (arg.start_with?("--servergroup="))
@@ -89,6 +90,8 @@ class CmdArgs
       elsif (arg.start_with?("--debug"))
         @debug = true
         @page_size = 20
+      elsif (arg.start_with?("--apistats"))
+        @api_stats = true
       elsif (arg.start_with?("--threads="))
         argarg, tmptc = arg.split("=")
         begin
@@ -220,8 +223,15 @@ def displayScanResults(scanList,verbose,details,debug)
       if (details == :Console)
         puts JSON.pretty_generate ss.details
       elsif (details == :Files)
+        if (ss.completed_at != nil)
+          date = ss.completed_at.split("T")[0]
+        elsif (ss.created_at != nil)
+          date = ss.created_at.split("T")[0]
+        else
+          date = "unknown"
+        end
         prefix = "details/#{ss.server_hostname}_#{ss.server_id.downcase}"
-        filename = prefix + "/#{ss.module.downcase}_#{ss.id}_details.txt"
+        filename = prefix + "/#{ss.module.downcase}_#{ss.id}_#{date}_details.txt"
         f = openFileInDir(filename)
         f.write(JSON.pretty_generate ss.details)
         f.close()
@@ -370,6 +380,12 @@ cmd_line.key_list.each do |key|
       end
       sumMap.each do |stype,bucket|
         puts "Scan: type=#{bucket.type_name} passed=#{bucket.pass_count} failed=#{bucket.fail_count}"
+      end
+    end
+    if (cmd_line.api_stats)
+      stats = client.stats
+      stats.each do |tid,tstat|
+        puts "API Stats: thread[#{tid}]: calls=#{tstat.call_count} time=#{tstat.total_time}"
       end
     end
   rescue Halo::ConnectionException => conn_err
