@@ -47,4 +47,6 @@ After the program has run successfully, you will find a directory called “deta
 To retrieve and archive scan data since, say January 1 of 2015, use the following command:
 $./archiveScanData.rb --auth=/opt/halo/scanData.auth --threads=30 --detailsfiles --starting=2015-01-01
 
-  
+  <!---
+  #CPTAGS:community-supported archive
+  -->
