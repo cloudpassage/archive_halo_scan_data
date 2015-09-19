@@ -33,16 +33,26 @@ Run the following command to see program usage:
 $ ./archiveScanData.rb -?
 
 Usage: archiveScanData.rb [flag]
+  
   where flag can be one of:
+  
     --auth=<file>			Read auth info from <file>
+  
     --starting=<when>		Only get historical scans after <when> (ISO-8601 format)
+  
     --ending=<when>		Only get historical scans till <when> (ISO-8601 format)
+  
     --base=<url>			Override base URL (normally https://portal.cloudpassage.com/)
+  
     --localca			Use local CA file (needed on Windows)
+  
     --detailsfiles			Write details about each scan's results to a set of files locally
+  
     --threads=<num>		Set number of threads to use downloading scan results
 
 After the program has run successfully, you will find a directory called “details” created under your current working directory under which the scan details will be archived.
+
+If you have a large environment or a high scan frequency, consider using the --starting= and --ending= variables to reduce your memory consumption while running this tool.
 
 To retrieve and archive scan data since, say January 1 of 2015, use the following command:
 $./archiveScanData.rb --auth=/opt/halo/scanData.auth --threads=30 --detailsfiles --starting=2015-01-01
