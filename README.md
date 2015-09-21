@@ -59,4 +59,5 @@ $./archiveScanData.rb --auth=/opt/halo/scanData.auth --threads=30 --detailsfiles
 
 <!---
 #CPTAGS:community-supported archive
+#TBICON:images/ruby_icon.png
 -->
