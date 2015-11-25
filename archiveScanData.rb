@@ -50,8 +50,8 @@ class CmdArgs
 
   def initialize()
     @base_url = "https://portal.cloudpassage.com/"
-    @key_id = "05266dad"
-    @key_secret = "03f7ce883627f654cc877f67c9d61393"
+    @key_id = "key_id"
+    @key_secret = "key_secret"
     @url = nil
     @group_name = nil
     @verbose = false
@@ -59,13 +59,44 @@ class CmdArgs
     @get_status = false
     @starting = nil
     @ending = nil
-    @page_size = 100
+    @page_size = 20
     @details = :None
     @percentiles = false
     @threads = 1
     @debug = false
     @key_list = []
     @api_stats = false
+  end
+
+  def checkDigitRange(digits,min,max,name,type)
+    if (digits != nil)
+      num = digits.to_i
+      if (num < min) || (num > max)
+        puts "Illegal #{name} value (#{num}) in #{type} date"
+        return false
+      end
+    end
+    return true
+  end
+
+  def checkDate(timestamp,type)
+    if (timestamp !~ /(\d{4})-(\d{2})-(\d{2})(T(\d{2}):(\d{2})(:(\d{2})(\.(\d{1,6}))?)?(Z|[+-]\d{4})?)?$/)
+      puts "#{timestamp} is an illegal #{type} date format, use ISO8601"
+      return false
+    else
+      return false if (! checkDigitRange($1,1900,2100,"year",type))
+      return false if (! checkDigitRange($2,1,12,"month",type))
+      return false if (! checkDigitRange($3,1,31,"day",type))
+      return false if (! checkDigitRange($5,0,23,"hour",type))
+      return false if (! checkDigitRange($6,0,59,"minute",type))
+      return false if (! checkDigitRange($8,0,59,"seconds",type))
+    end
+    now = Time.now.utc.iso8601
+    if (timestamp > now)
+      puts "#{type} date/time #{timestamp} is in the future, use a current or past date/time"
+      return false
+    end
+    return true
   end
 
   def parse(args)
@@ -79,35 +110,41 @@ class CmdArgs
       elsif (arg == "-?") || (arg == "-h") || (arg == "--help")
         usage
         exit
-      elsif (arg.start_with?("--servergroup="))
-        argarg, @group_name = arg.split("=")
       elsif (arg.start_with?("--starting="))
         argarg, @starting = arg.split("=")
+        if (! checkDate(@starting,"starting"))
+          ok = false
+        end
       elsif (arg.start_with?("--ending="))
         argarg, @ending = arg.split("=")
+        if (! checkDate(@ending,"ending"))
+          ok = false
+        end
       elsif (arg.start_with?("--base="))
         argarg, @base_url = arg.split("=")
       elsif (arg.start_with?("--debug"))
         @debug = true
-        @page_size = 20
       elsif (arg.start_with?("--apistats"))
         @api_stats = true
+      elsif (arg.start_with?("--page="))
+        argarg, @page_size = arg.split("=")
       elsif (arg.start_with?("--threads="))
         argarg, tmptc = arg.split("=")
         begin
           @threads = Integer(tmptc)
-          if (@threads < 1) || (@threads > 100)
+          if (@threads < 1) || (@threads > 10)
             puts "Illegal thread number: #{@threads}"
-            puts "--thread=<num> requires an integer between 1 and 100"
+            puts "--thread=<num> requires an integer between 1 and 10"
             ok = false
           end
         rescue
           puts "Invalid thread number: #{tmptc}"
-          puts "--thread=<num> requires an integer between 1 and 100"
+          puts "--thread=<num> requires an integer between 1 and 10"
           ok = false
         end
-      elsif (arg == "--localca")
-        ENV['SSL_CERT_FILE'] = File.expand_path(File.dirname(__FILE__)) + "/certs/cacert.pem"
+      elsif (arg.start_with?("--localca="))
+        argarg, certpath = arg.split("=")
+        ENV['SSL_CERT_FILE'] = certpath
       elsif (arg == "--details")
         @details = :Console
       elsif (arg == "--detailsfiles")
@@ -116,6 +153,13 @@ class CmdArgs
         @percentiles = true
       else
         puts "Unrecognized argument: #{arg}"
+        ok = false
+      end
+    end
+    if (@starting != nil) && (@ending != nil)
+      # puts "Both starting and ending specified"
+      if (@starting > @ending)
+        puts "starting time (#{@starting}) must be earlier than ending time (#{@ending})"
         ok = false
       end
     end
@@ -129,9 +173,9 @@ class CmdArgs
     puts "    --starting=<when>\t\tOnly get status for scans after when (ISO-8601 format)"
     puts "    --ending=<when>\t\tOnly get status for scans before when (ISO-8601 format)"
     puts "    --base=<url>\t\tOverride base URL (normally #{@base_url})"
-    puts "    --localca\t\t\tUse local CA file (needed on Windows)"
+    puts "    --localca=<path>\t\tUse local CA file (needed on Windows)"
     puts "    --detailsfiles\t\tWrite details about each scan's results to a set of files"
-    puts "    --threads=<num>\t\tSet number of threads to use downloading scan results"
+    puts "    --threads=<num>\t\tSet number (between 1 and 10) of threads to use downloading scan results"
   end
 
   def readAuthFile(filename)
@@ -297,11 +341,11 @@ class FetchResultsThread
           redo
         rescue Halo::FailedException => bad_err
           if (retry_count > 3)
-            puts "Thread #{@start} failed, exiting: #{ex.message}"
+            puts "Thread #{@start} failed, exiting: status=#{bad_err.http_status} #{bad_err.error_description}"
             exit 1
           else
             retry_count += 1
-            puts "Thread #{@start} failed, retrying: #{ex.message}"
+            puts "Thread #{@start} failed, retrying: status=#{bad_err.http_status} #{bad_err.error_description}"
             redo
           end
         end
@@ -311,6 +355,8 @@ class FetchResultsThread
         puts "Storing output for page #{pageNum}" if @cmd_line.debug
         pageNum += @increment
       end until (status_list == nil) or (status_list.size == 0)
+    rescue Halo::FailedException => bad_err
+      puts "Thread #{@start} failed, exiting: status=#{bad_err.http_status} #{bad_err.error_description}"
     rescue Exception => ex
       puts "Thread #{@start} failed, exiting: #{ex.message}"
     end
@@ -389,7 +435,7 @@ cmd_line.key_list.each do |key|
       end
     end
   rescue Halo::ConnectionException => conn_err
-    puts "Connection Error: #{conn_err.error_descr}"
+    puts "Connection Error: #{conn_err.error_description}"
     exit
   rescue Halo::AuthException => api_err
     puts "Auth Error: status=#{api_err.http_status} msg=#{api_err.error_msg}"
