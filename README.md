@@ -58,6 +58,6 @@ To retrieve and archive scan data since, say January 1 of 2015, use the followin
 $./archiveScanData.rb --auth=/opt/halo/scanData.auth --threads=30 --detailsfiles --starting=2015-01-01
 
 <!---
-#CPTAGS:community-supported archive
+#CPTAGS:community-unsupported archive
 #TBICON:images/ruby_icon.png
 -->
